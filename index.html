@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BLE Terminal with Fallback</title>
+  <title>BLE Terminal with Fallback Service</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     #log {
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h2>BLE Terminal with Fallback</h2>
+  <h2>BLE Terminal with Fallback Service</h2>
   <div id="status"></div>
   <button id="connect">Connect to Device</button>
   <button id="disconnect" disabled>Disconnect</button>
@@ -63,7 +63,7 @@
         return;
       }
       try {
-        // Request any BLE device; we list the expected UART service as optional.
+        // Request any BLE device, listing the expected UART service as optional.
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
@@ -71,23 +71,61 @@
         statusDiv.textContent = "Connecting...";
         server = await device.gatt.connect();
 
-        // Try to get the expected UART service
+        // Try to get the expected UART service.
         try {
           service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
           uartServiceFound = true;
-          // If found, get the write and notify characteristics
           writeCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
           notifyCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
           await notifyCharacteristic.startNotifications();
           notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
           logMessage("Connected with expected UART service.");
           sendButton.disabled = false;
-        } catch (error) {
-          uartServiceFound = false;
-          logMessage("UART service not found. Connected without expected service. Send disabled.");
-          sendButton.disabled = true;
+        } catch (uartError) {
+          logMessage("UART service not found. Attempting fallback...");
+          // Fallback: Get all available primary services.
+          let services = await server.getPrimaryServices();
+          let fallbackFound = false;
+          for (const s of services) {
+            try {
+              let characteristics = await s.getCharacteristics();
+              for (const c of characteristics) {
+                // Look for a characteristic with write property.
+                if (c.properties.write || c.properties.writeWithoutResponse) {
+                  writeCharacteristic = c;
+                  // Try to find a notifiable characteristic in the same service.
+                  for (const nc of characteristics) {
+                    if (nc.properties.notify) {
+                      notifyCharacteristic = nc;
+                      try {
+                        await notifyCharacteristic.startNotifications();
+                        notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                      } catch (notifyError) {
+                        console.log("Notify setup error: " + notifyError);
+                      }
+                      break;
+                    }
+                  }
+                  fallbackFound = true;
+                  break;
+                }
+              }
+            } catch (innerError) {
+              console.log("Error accessing service: " + innerError);
+            }
+            if (fallbackFound) {
+              break;
+            }
+          }
+          if (fallbackFound) {
+            logMessage("Fallback service found. Send enabled.");
+            sendButton.disabled = false;
+          } else {
+            logMessage("No writable service found. Send disabled.");
+            sendButton.disabled = true;
+          }
         }
-        
+
         disconnectButton.disabled = false;
         device.addEventListener('gattserverdisconnected', onDisconnected);
         statusDiv.textContent = "Connected";
@@ -123,7 +161,7 @@
 
     async function sendCommand() {
       if (!writeCharacteristic) {
-        logMessage("UART service not available; cannot send command.");
+        logMessage("Writable characteristic not available; cannot send command.");
         return;
       }
       const command = commandInput.value;
