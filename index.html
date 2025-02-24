@@ -1,102 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Bluetooth Serial Monitor</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 0 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .terminal {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            padding: 10px;
-            border-radius: 4px;
-            height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            margin: 10px 0;
-        }
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        .input-group {
-            display: flex;
-            gap: 10px;
-        }
-        input[type="text"] {
-            flex-grow: 1;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .status {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .connected {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Web Bluetooth Terminal</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #log {
+      width: 100%;
+      height: 200px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    input, button { margin: 5px; padding: 8px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>ESP32 Bluetooth Serial Monitor</h1>
-        
-        <div class="status disconnected" id="statusBar">
-            Not connected
-        </div>
+  <h2>ESP32 Web Bluetooth Terminal</h2>
+  <div id="status"></div>
+  <button id="connect">Connect to ESP32</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <br>
+  <textarea id="log" readonly></textarea>
+  <br>
+  <input type="text" id="command" placeholder="Enter command">
+  <button id="send" disabled>Send</button>
 
-        <div class="controls">
-            <button id="connectBtn">Connect</button>
-            <button id="disconnectBtn" disabled>Disconnect</button>
-            <button id="clearBtn">Clear Terminal</button>
-        </div>
+  <script>
+    let device = null;
+    let server = null;
+    let service = null;
+    let writeCharacteristic = null;
+    let notifyCharacteristic = null;
 
-        <div class="terminal" id="terminal"></div>
+    const statusDiv = document.getElementById("status");
+    const logArea = document.getElementById("log");
+    const connectButton = document.getElementById("connect");
+    const disconnectButton = document.getElementById("disconnect");
+    const sendButton = document.getElementById("send");
+    const commandInput = document.getElementById("command");
 
-        <div class="input-group">
-            <input type="text" id="messageInput" placeholder="Type your message..." disabled>
-            <button id="sendBtn" disabled>Send</button>
-        </div>
-    </div>
+    function logMessage(message) {
+      logArea.value += message + "\n";
+      logArea.scrollTop = logArea.scrollHeight;
+    }
 
-    <script src="code.js"></script>
+    function resetVariables() {
+      device = null;
+      server = null;
+      service = null;
+      writeCharacteristic = null;
+      notifyCharacteristic = null;
+    }
 
+    async function connect() {
+      // Feature detection for Web Bluetooth
+      if (!navigator.bluetooth) {
+        statusDiv.textContent = "Web Bluetooth API is not available in this browser.";
+        return;
+      }
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+        });
+        statusDiv.textContent = "Connecting...";
+        server = await device.gatt.connect();
+        service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+
+        // Get write characteristic (NUS TX)
+        writeCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+
+        // Get notify characteristic (NUS RX)
+        notifyCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+        await notifyCharacteristic.startNotifications();
+        notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+
+        logMessage("Connected to ESP32");
+        statusDiv.textContent = "Connected";
+        sendButton.disabled = false;
+        disconnectButton.disabled = false;
+
+        device.addEventListener('gattserverdisconnected', onDisconnected);
+      } catch (error) {
+        logMessage("Connection failed: " + error);
+        statusDiv.textContent = "Connection failed";
+        resetVariables();
+      }
+    }
+
+    function onDisconnected() {
+      logMessage("Disconnected from device");
+      statusDiv.textContent = "Disconnected";
+      sendButton.disabled = true;
+      disconnectButton.disabled = true;
+      resetVariables();
+    }
+
+    function handleNotifications(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder('utf-8');
+      const text = decoder.decode(value);
+      logMessage("Received: " + text);
+    }
+
+    async function disconnect() {
+      if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+      } else {
+        logMessage("No device connected");
+      }
+    }
+
+    async function sendCommand() {
+      if (!writeCharacteristic) {
+        logMessage("Not connected to a device");
+        return;
+      }
+      const command = commandInput.value;
+      if (!command) {
+        logMessage("Please enter a command");
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        // Appending newline; adjust as needed by your ESP32 firmware
+        const data = encoder.encode(command + "\n");
+        await writeCharacteristic.writeValue(data);
+        logMessage("Sent: " + command);
+      } catch (error) {
+        logMessage("Failed to send command: " + error);
+      }
+    }
+
+    connectButton.addEventListener("click", connect);
+    disconnectButton.addEventListener("click", disconnect);
+    sendButton.addEventListener("click", sendCommand);
+  </script>
 </body>
 </html>
