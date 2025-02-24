@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 Web Bluetooth Terminal</title>
+  <title>BLE Terminal with Fallback</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     #log {
@@ -18,9 +18,9 @@
   </style>
 </head>
 <body>
-  <h2>ESP32 Web Bluetooth Terminal</h2>
+  <h2>BLE Terminal with Fallback</h2>
   <div id="status"></div>
-  <button id="connect">Connect to ESP32</button>
+  <button id="connect">Connect to Device</button>
   <button id="disconnect" disabled>Disconnect</button>
   <br>
   <textarea id="log" readonly></textarea>
@@ -34,6 +34,7 @@
     let service = null;
     let writeCharacteristic = null;
     let notifyCharacteristic = null;
+    let uartServiceFound = false;
 
     const statusDiv = document.getElementById("status");
     const logArea = document.getElementById("log");
@@ -53,37 +54,43 @@
       service = null;
       writeCharacteristic = null;
       notifyCharacteristic = null;
+      uartServiceFound = false;
     }
 
     async function connect() {
-      // Feature detection for Web Bluetooth
       if (!navigator.bluetooth) {
         statusDiv.textContent = "Web Bluetooth API is not available in this browser.";
         return;
       }
       try {
+        // Request any BLE device; we list the expected UART service as optional.
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
         });
         statusDiv.textContent = "Connecting...";
         server = await device.gatt.connect();
-        service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
 
-        // Get write characteristic (NUS TX)
-        writeCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
-
-        // Get notify characteristic (NUS RX)
-        notifyCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-        await notifyCharacteristic.startNotifications();
-        notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-
-        logMessage("Connected to ESP32");
-        statusDiv.textContent = "Connected";
-        sendButton.disabled = false;
+        // Try to get the expected UART service
+        try {
+          service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+          uartServiceFound = true;
+          // If found, get the write and notify characteristics
+          writeCharacteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+          notifyCharacteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+          await notifyCharacteristic.startNotifications();
+          notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+          logMessage("Connected with expected UART service.");
+          sendButton.disabled = false;
+        } catch (error) {
+          uartServiceFound = false;
+          logMessage("UART service not found. Connected without expected service. Send disabled.");
+          sendButton.disabled = true;
+        }
+        
         disconnectButton.disabled = false;
-
         device.addEventListener('gattserverdisconnected', onDisconnected);
+        statusDiv.textContent = "Connected";
       } catch (error) {
         logMessage("Connection failed: " + error);
         statusDiv.textContent = "Connection failed";
@@ -116,7 +123,7 @@
 
     async function sendCommand() {
       if (!writeCharacteristic) {
-        logMessage("Not connected to a device");
+        logMessage("UART service not available; cannot send command.");
         return;
       }
       const command = commandInput.value;
@@ -126,8 +133,7 @@
       }
       try {
         const encoder = new TextEncoder();
-        // Appending newline; adjust as needed by your ESP32 firmware
-        const data = encoder.encode(command + "\n");
+        const data = encoder.encode(command + "\n"); // Append newline if required by firmware
         await writeCharacteristic.writeValue(data);
         logMessage("Sent: " + command);
       } catch (error) {
