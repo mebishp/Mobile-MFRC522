@@ -75,3 +75,24 @@ footer {
         background-position: 50% 100%;
     }
 }
+
+/* Media queries for mobile devices */
+@media (max-width: 600px) {
+    h1 {
+        font-size: 36px;
+    }
+
+    button {
+        font-size: 16px;
+        padding: 10px 20px;
+        margin: 15px;
+    }
+
+    p {
+        font-size: 16px;
+    }
+
+    .container {
+        padding: 10px;
+    }
+}
