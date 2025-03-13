@@ -1,21 +1,253 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Mobile-RC522</title>
-    <!-- Importing Roboto font for a modern look -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFRC522 - Dashboard</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="container">
-        <h1>Mobile-RC522</h1>
-        <button onclick="connectBLE()">Connect to ESP32</button>
-        <p id="connection-status"><strong>Connection Status:</strong> Not connected</p>
-        <p><strong>Scanned UID:</strong> <span id="uid">None</span></p>
+<body class="fade-in">
+    <!-- Animated background shapes -->
+    <div class="animated-background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
     </div>
-    
-    <footer>With ❤️ Team Four - Build Club</footer>
-    <script src="app.js"></script>
+
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-fingerprint"></i>
+                <span>MFRC522</span>
+            </div>
+            <div class="user-section" id="userDisplay">
+                <!-- User info will be displayed here -->
+            </div>
+        </div>
+    </header>
+
+    <div class="content">
+        <div class="dashboard-header floating">
+            <h1>RFID Dashboard</h1>
+            <h4>Manage Your Batches</h4>
+        </div>
+
+        <div class="card batch-section">
+            <div class="section-header">
+                <i class="fas fa-users"></i>
+                <h2>Your Batches</h2>
+            </div>
+            <div class="button-container" id="batchButtons">
+                <!-- Buttons will be dynamically generated here -->
+                <div class="skeleton-loader"></div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <a id="data" href="attendancedata.html" class="data-button">
+                <i class="fas fa-table"></i>
+                <span>View Attendance Data</span>
+            </a>
+            <button onclick="logout()" class="logout-button">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <p>Made with <i class="fas fa-heart pulse"></i> by Team Four - Build Club</p>
+            <div class="footer-links">
+                <a href="#"><i class="fab fa-github"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fas fa-envelope"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBXCnzQdEipSGxOnyMVUbRpd5NdSV4o4kA",
+            authDomain: "mobile-mfrc522.firebaseapp.com",
+            databaseURL: "https://mobile-mfrc522-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mobile-mfrc522",
+            storageBucket: "mobile-mfrc522.firebasestorage.app",
+            messagingSenderId: "552804570850",
+            appId: "1:552804570850:web:c808f2258888298c79f0bb",
+            measurementId: "G-NVWDS307VB"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                // User is signed in
+                console.log('User is signed in as ' + user.email);
+                displayUserInfo(user);
+                loadAccessibleBatches(user);
+            } else {
+                // No user is signed in
+                console.log('No user is signed in');
+                document.body.classList.add('fade-out');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 500);
+            }
+        });
+
+        function displayUserInfo(user) {
+            const userDisplay = document.getElementById('userDisplay');
+            userDisplay.innerHTML = `
+                <div class="user-avatar">
+                    ${user.photoURL ? `<img src="${user.photoURL}" alt="${user.displayName || user.email}">` : `<div class="avatar-placeholder">${(user.email[0] || 'U').toUpperCase()}</div>`}
+                </div>
+                <div class="user-info">
+                    <span class="user-name">${user.displayName || 'User'}</span>
+                    <span class="user-email">${user.email}</span>
+                </div>
+            `;
+        }
+
+        function loadAccessibleBatches(user) {
+            const userEmail = user.email;
+            // Replace all dots with commas using a global regex
+            const safeEmail = userEmail.replace(/\./g, ',');
+            console.log('Fetching batches for safe email:', safeEmail);
+            const userRef = database.ref(`users/${safeEmail}/batches`);
+
+            // Show skeleton loader
+            document.getElementById('batchButtons').innerHTML = `
+                <div class="skeleton-loader"></div>
+                <div class="skeleton-loader"></div>
+                <div class="skeleton-loader"></div>
+            `;
+
+            userRef.once('value')
+                .then((snapshot) => {
+                    const accessibleBatches = snapshot.val();
+                    if (accessibleBatches) {
+                        generateButtons(accessibleBatches);
+                    } else {
+                        document.getElementById('batchButtons').innerHTML = `
+                            <div class="no-data-message">
+                                <i class="fas fa-folder-open"></i>
+                                <p>No accessible batches found</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error fetching accessible batches:", error);
+                    document.getElementById('batchButtons').innerHTML = `
+                        <div class="error-message">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Error loading batches</p>
+                        </div>
+                    `;
+                });
+        }
+
+        function generateButtons(batches) {
+            const buttonContainer = document.getElementById('batchButtons');
+            buttonContainer.innerHTML = ''; // Clear existing buttons
+            console.log('Generating buttons for batches:', batches);
+
+            const batchEntries = Object.entries(batches);
+            
+            batchEntries.forEach(([batch, isAccessible], index) => {
+                if (isAccessible) {
+                    const button = document.createElement('button');
+                    button.className = 'batch-button'; // Add class for styling
+                    button.innerHTML = `
+                        <i class="fas fa-users"></i>
+                        <span class="batch-name">${toTitleCase(batch)}</span>
+                    `; // Convert to title case
+                    
+                    // Add a staggered animation delay
+                    button.style.animationDelay = `${index * 0.1}s`;
+                    
+                    button.onclick = function() {
+                        goToAttendance(batch);
+                    };
+                    buttonContainer.appendChild(button);
+                    console.log('Button added for batch:', batch);
+                    
+                    // Add a ripple effect
+                    button.addEventListener('mousedown', function(e) {
+                        const ripple = document.createElement('span');
+                        ripple.className = 'ripple';
+                        this.appendChild(ripple);
+                        
+                        const rect = this.getBoundingClientRect();
+                        const size = Math.max(rect.width, rect.height);
+                        
+                        const x = e.clientX - rect.left - size / 2;
+                        const y = e.clientY - rect.top - size / 2;
+                        
+                        ripple.style.width = ripple.style.height = `${size}px`;
+                        ripple.style.left = `${x}px`;
+                        ripple.style.top = `${y}px`;
+                        
+                        ripple.addEventListener('animationend', () => {
+                            ripple.remove();
+                        });
+                    });
+                }
+            });
+            
+            // Add empty state if no buttons were added
+            if (batchEntries.length === 0) {
+                buttonContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>No batches available</p>
+                    </div>
+                `;
+            }
+        }
+
+        function goToAttendance(batchNumber) {
+            document.body.classList.add('fade-out');
+            setTimeout(() => {
+                localStorage.setItem('batch', String(batchNumber));
+                window.location.href = 'attendance.html';
+            }, 500);
+        }
+
+        function logout() {
+            auth.signOut()
+                .then(() => {
+                    console.log('User signed out');
+                    document.body.classList.add('fade-out');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 500);
+                })
+                .catch((error) => {
+                    console.error("Error signing out:", error);
+                    alert('Failed to logout: ' + error.message);
+                });
+        }
+
+        function toTitleCase(str) {
+            return str.replace(/\w\S*/g, function(txt){
+                return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+            });
+        }
+    </script>
 </body>
 </html>

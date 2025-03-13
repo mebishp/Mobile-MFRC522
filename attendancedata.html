@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Attendance Data</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="fade-in">
+    <div class="content">
+        <a href="index.html"><h1>Attendance Data</h1></a>
+
+        <label for="batchSelect">Select Batch:</label>
+        <select id="batchSelect">
+            <!-- Batches will be dynamically added here -->
+        </select>
+
+        <button onclick="fetchAttendanceData()">Fetch Data</button>
+
+        <div id="attendanceList">
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th>UID</th>
+                        <th>Name</th>
+                        <th>Roll</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+        <script>
+            // Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyBXCnzQdEipSGxOnyMVUbRpd5NdSV4o4kA",
+                authDomain: "mobile-mfrc522.firebaseapp.com",
+                databaseURL: "https://mobile-mfrc522-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "mobile-mfrc522",
+                storageBucket: "mobile-mfrc522.firebasestorage.app",
+                messagingSenderId: "552804570850",
+                appId: "1:552804570850:web:c808f2258888298c79f0bb",
+                measurementId: "G-NVWDS307VB"
+            };
+
+            // Initialize Firebase
+            const app = firebase.initializeApp(firebaseConfig);
+            const auth = firebase.auth();
+            const database = firebase.database();
+
+            let accessibleBatches = {};
+
+            auth.onAuthStateChanged(function(user) {
+                if (user) {
+                    // User is signed in
+                    console.log('User is signed in as ' + user.email);
+                    loadAccessibleBatches(user);
+                } else {
+                    // No user is signed in
+                    console.log('No user is signed in');
+                    window.location.href = 'login.html'; // Redirect to login page
+                }
+            });
+
+            function loadAccessibleBatches(user) {
+                const userEmail = user.email;
+                // Replace all dots with commas using a global regex
+                const safeEmail = userEmail.replace(/\./g, ',');
+                console.log('Fetching batches for safe email:', safeEmail);
+                const userRef = database.ref(`users/${safeEmail}/batches`);
+
+                userRef.once('value')
+                    .then((snapshot) => {
+                        accessibleBatches = snapshot.val() || {};
+                        console.log('Accessible batches:', accessibleBatches);
+                        populateBatchSelect();
+                    })
+                    .catch((error) => {
+                        console.error("Error fetching accessible batches:", error);
+                        document.getElementById('batchSelect').innerHTML = '<option>Error loading batches</option>';
+                    });
+            }
+
+            function populateBatchSelect() {
+                const batchSelect = document.getElementById('batchSelect');
+                batchSelect.innerHTML = ''; // Clear existing options
+
+                let hasOptions = false; // Check if there are any options to display
+                console.log('Populating batch select with:', accessibleBatches);
+
+                for (const batch in accessibleBatches) {
+                    if (accessibleBatches.hasOwnProperty(batch) && accessibleBatches[batch] === true) {
+                        const option = document.createElement('option');
+                        option.value = batch;
+                        option.textContent = batch;
+                        batchSelect.appendChild(option);
+                        hasOptions = true; // Set to true if at least one option is added
+                        console.log('Added option:', batch);
+                    }
+                }
+
+                if (!hasOptions) {
+                    const option = document.createElement('option');
+                    option.textContent = "No accessible batches";
+                    option.disabled = true;
+                    batchSelect.appendChild(option);
+                    console.log('No accessible batches found');
+                }
+            }
+
+            function fetchAttendanceData() {
+                const batch = document.getElementById("batchSelect").value;
+                const attendanceTableBody = document.getElementById("attendanceTable").getElementsByTagName("tbody")[0];
+                attendanceTableBody.innerHTML = ""; // Clear previous data
+
+                // Check if the user has access to the selected batch
+                if (!accessibleBatches[batch]) {
+                    const row = attendanceTableBody.insertRow();
+                    const cell = row.insertCell(0);
+                    cell.colSpan = 4;
+                    cell.textContent = "You do not have permission to view this batch.";
+                    return;
+                }
+
+                const attendanceRef = database.ref(`attendance/${batch}`);
+                console.log('Fetching attendance data for batch:', batch);
+
+                attendanceRef.once('value')
+                    .then((snapshot) => {
+                        const attendanceData = snapshot.val();
+                        console.log('Attendance data:', attendanceData);
+
+                        if (attendanceData) {
+                            for (const uid in attendanceData) {
+                                if (attendanceData.hasOwnProperty(uid)) {
+                                    const userData = attendanceData[uid];
+                                    for (const timestamp in userData) {
+                                        if (userData.hasOwnProperty(timestamp)) {
+                                            const attendanceEntry = userData[timestamp];
+                                            const row = attendanceTableBody.insertRow();
+                                            row.insertCell(0).textContent = uid;
+                                            row.insertCell(1).textContent = attendanceEntry.name;
+                                            row.insertCell(2).textContent = attendanceEntry.roll;
+                                            row.insertCell(3).textContent = formatTimestamp(timestamp);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            const row = attendanceTableBody.insertRow();
+                            const cell = row.insertCell(0);
+                            cell.colSpan = 4;
+                            cell.textContent = "No attendance data found for this batch.";
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Error fetching attendance data:", error);
+                        const row = attendanceTableBody.insertRow();
+                        const cell = row.insertCell(0);
+                        cell.colSpan = 4;
+                        cell.textContent = "Error fetching data. Please check the console.";
+                    });
+            }
+
+            function formatTimestamp(timestamp) {
+                const hh = timestamp.substring(0, 2);
+                const mm = timestamp.substring(2, 4);
+                const dd = timestamp.substring(4, 6);
+                const MM = timestamp.substring(6, 8);
+                const yy = timestamp.substring(8, 10);
+
+                return `${hh}:${mm} ${dd}/${MM}/${yy}`;
+            }
+        </script>
+    </div>
+    <footer>With ❤️ Team Four - Build Club</footer>
+</body>
+</html>

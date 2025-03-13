@@ -1,0 +1,111 @@
+{"data": {
+  "batch1": {
+    "aaaa": {
+    "name": "user1",
+    "roll": "URK24CS7001"
+    },
+    "aaab": {
+    "name": "user2",
+    "roll": "URK24CS7002"
+    },
+    "aaac": {
+    "name": "user3",
+    "roll": "URK24CS7003"
+    },
+    "aaad": {
+    "name": "user4",
+    "roll": "URK24CS7004"
+    }
+  },
+  "batch2": {
+    "aaaa": {
+    "name": "user1",
+    "roll": "URK24CS7005"
+    },
+    "aaab": {
+    "name": "user2",
+    "roll": "URK24CS7006"
+    },
+    "aaac": {
+    "name": "user3",
+    "roll": "URK24CS7007"
+    },
+    "aaad": {
+    "name": "user4",
+    "roll": "URK24CS7008"
+    }
+  },
+   "batch3": {
+    "aaaa": {
+    "name": "user1",
+    "roll": "URK24CS7009"
+    },
+    "aaab": {
+    "name": "user2",
+    "roll": "URK24CS7010"
+    },
+    "aaac": {
+    "name": "user3",
+    "roll": "URK24CS7011"
+    },
+    "aaad": {
+    "name": "user4",
+    "roll": "URK24CS7012"
+    }
+  },
+  "batch4": {
+    "aaaa": {
+    "name": "user1",
+    "roll": "URK24CS7013"
+    },
+    "aaab": {
+    "name": "user2",
+    "roll": "URK24CS7014"
+    },
+    "aaac": {
+    "name": "user3",
+    "roll": "URK24CS7015"
+    },
+    "aaad": {
+    "name": "user4",
+    "roll": "URK24CS7016"
+    }
+  },
+  "batch5": {
+    "aaaa": {
+    "name": "user1",
+    "roll": "URK24CS7017"
+    },
+    "aaab": {
+    "name": "user2",
+    "roll": "URK24CS7018"
+    },
+    "aaac": {
+    "name": "user3",
+    "roll": "URK24CS7019"
+    },
+    "aaad": {
+    "name": "user4",
+    "roll": "URK24CS7020"
+    }
+  }
+  },
+"attendance" : {
+ "example":true
+},
+"users": {
+  "mebishpm@gmail,com": {
+    "batches": {
+    "batch1": true,
+    "batch2": true
+    }
+  },
+  "pmebish@karunya,edu,in": {
+    "batches": {
+    "batch3": true,
+    "batch4": true,
+    "batch5": true
+    }
+  }
+  }
+}

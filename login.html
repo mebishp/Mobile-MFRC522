@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - MFRC522</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .input-with-icon {
+            position: relative;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .input-with-icon i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .input-with-icon input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+            margin-bottom: 0;
+        }
+        
+        .input-with-icon input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="fade-in">
+    <!-- Animated background shapes -->
+    <div class="animated-background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <div class="container">
+        <div class="card floating">
+            <h1>MFRC522</h1>
+            <h4>Secure Authentication System</h4>
+            
+            <div class="login-form" id="emailLoginForm">
+                <div class="form-header">
+                    <i class="fas fa-user-shield"></i>
+                    <h3>Account Login</h3>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" required placeholder="Enter your email">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" required placeholder="Enter your password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">
+                    <span>Login</span>
+                    <i class="fas fa-sign-in-alt"></i>
+                </button>
+            </div>
+            
+            <div class="login-buttons">
+                <button onclick="googleLogin()" class="btn-google">
+                    <i class="fab fa-google"></i>
+                    <span>Login with Google</span>
+                </button>
+                
+                <button onclick="logout()" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+            
+            <div id="loginStatus" class="status-message"></div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <p>Made with <i class="fas fa-heart pulse"></i> by Team Four - Build Club</p>
+            <div class="footer-links">
+                <a href="#"><i class="fab fa-github"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fas fa-envelope"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBXCnzQdEipSGxOnyMVUbRpd5NdSV4o4kA",
+            authDomain: "mobile-mfrc522.firebaseapp.com",
+            databaseURL: "https://mobile-mfrc522-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mobile-mfrc522",
+            storageBucket: "mobile-mfrc522.firebasestorage.app",
+            messagingSenderId: "552804570850",
+            appId: "1:552804570850:web:c808f2258888298c79f0bb",
+            measurementId: "G-NVWDS307VB"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        document.getElementById('emailLoginForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // Show loading state
+            const button = this.querySelector('button');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+            button.disabled = true;
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Signed in
+                    const user = userCredential.user;
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Logged in as ' + user.email;
+                    statusEl.className = 'status-message success';
+                    
+                    // Add success animation
+                    button.innerHTML = '<i class="fas fa-check"></i> Success!';
+                    
+                    // Redirect after showing success message
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1000);
+                })
+                .catch((error) => {
+                    const errorCode = error.code;
+                    const errorMessage = error.message;
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Login failed: ' + errorMessage;
+                    statusEl.className = 'status-message error';
+                    
+                    // Reset button state
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    
+                    // Shake animation for error
+                    document.getElementById('emailLoginForm').classList.add('shake');
+                    setTimeout(() => {
+                        document.getElementById('emailLoginForm').classList.remove('shake');
+                    }, 500);
+                });
+        });
+
+        function googleLogin() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            const button = document.querySelector('.btn-google');
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+            button.disabled = true;
+
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    const user = result.user;
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Logged in as ' + user.email;
+                    statusEl.className = 'status-message success';
+                    
+                    // Redirect after showing success message
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1000);
+                })
+                .catch((error) => {
+                    const errorCode = error.code;
+                    const errorMessage = error.message;
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Google login failed: ' + errorMessage;
+                    statusEl.className = 'status-message error';
+                    
+                    // Reset button state
+                    button.innerHTML = '<i class="fab fa-google"></i> Login with Google';
+                    button.disabled = false;
+                });
+        }
+
+        function logout() {
+            auth.signOut()
+                .then(() => {
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Logged out successfully';
+                    statusEl.className = 'status-message success';
+                    
+                    // Add fade animation
+                    document.body.classList.add('fade-out');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 500);
+                })
+                .catch((error) => {
+                    const statusEl = document.getElementById('loginStatus');
+                    statusEl.textContent = 'Logout failed: ' + error.message;
+                    statusEl.className = 'status-message error';
+                });
+        }
+    </script>
+</body>
+</html>

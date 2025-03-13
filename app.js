@@ -31,15 +31,66 @@ async function connectBLE() {
         document.getElementById("connection-status").innerText = "Connection Status: Connection failed";
     }
 }
-
-function handleNotifications(event) {
-    let value = new TextDecoder().decode(event.target.value);
-    value = value.toUpperCase();
-    document.getElementById("uid").innerText = value;
-    console.log("New UID:", value);
-}
-
 function onDisconnected() {
     document.getElementById("connection-status").innerText = "Connection Status: Disconnected";
     console.log("Device disconnected");
 }
+function handleNotifications(event) {
+    let value = new TextDecoder().decode(event.target.value);
+    document.getElementById("uid").innerText = value;
+    console.log("New UID:", value);
+
+    fetchUserData(value); // Call the new fetchUserData function
+}
+
+function fetchUserData(uid) {
+    const batch = localStorage.getItem("batch");
+    console.log("Batch from localStorage:", batch);
+    const userRef = database.ref(`data/${batch}/${uid}`);    
+    console.log("Firebase Ref:", userRef.toString()); // <--- Very Important!
+
+    if (typeof database === 'undefined') {
+        console.error("Firebase database is not initialized!");
+        document.getElementById("userData").innerHTML = "Firebase not initialized.";
+        return;
+    }
+
+    userRef.on("value", (snapshot) => {
+        const userData = snapshot.val();
+        console.log("User Data:", userData); // <--- Inspect the entire object!
+
+        if (userData) {
+            const name = userData.name;
+            const className = userData.roll;  // Corrected! Assuming "roll" is the class
+            console.log("Name:", name);
+            console.log("Class:", className);
+            document.getElementById("userData").innerHTML = `Name: ${name}, Class: ${className}`;
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const MM = String(now.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const yy = String(now.getFullYear()).slice(2);
+            const attendanceKey = `${hh}${mm}${dd}${MM}${yy}`;
+
+            // Create a reference to the attendance data
+            const attendanceRef = database.ref(`attendance/${batch}/${uid}/${attendanceKey}`);
+
+            // Set the attendance data
+            attendanceRef.set({
+                name: name,
+                roll: className
+            })
+            .then(() => {
+                console.log("Attendance data saved successfully!");
+            })
+            .catch((error) => {
+                console.error("Error saving attendance data:", error);
+            });
+
+        } else {
+            document.getElementById("userData").innerHTML = "User not found.";
+        }
+    });
+}
+

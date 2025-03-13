@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Attendance - MFRC522</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="fade-in">
+    <!-- Animated background shapes -->
+    <div class="animated-background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-fingerprint"></i>
+                <span>MFRC522</span>
+            </div>
+            <a href="index.html" class="back-button">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to Dashboard</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="content">
+        <div class="attendance-header floating">
+            <h1>RFID Attendance</h1>
+            <h4 id="batchDisplay">Attendance Session</h4>
+        </div>
+
+        <div class="card scanner-section">
+            <div class="section-header">
+                <i class="fas fa-wifi"></i>
+                <h2>Scanner Connection</h2>
+            </div>
+            <div class="connection-status-container">
+                <div id="connection-indicator" class="status-indicator disconnected">
+                    <i class="fas fa-plug"></i>
+                </div>
+                <p id="connection-status">Not connected</p>
+            </div>
+            <div class="action-buttons">
+                <button onclick="connectBLE()" class="btn-connect">
+                    <i class="fas fa-bluetooth"></i>
+                    <span>Connect Scanner</span>
+                </button>
+                <button onclick="refreshPage()" class="btn-refresh">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="card scan-result">
+            <div class="section-header">
+                <i class="fas fa-id-card"></i>
+                <h2>Scan Result</h2>
+            </div>
+            <div class="scan-info">
+                <div class="info-item">
+                    <span class="info-label">Scanned UID:</span>
+                    <span id="uid" class="info-value highlight">None</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card user-info" id="userDataCard">
+            <div class="section-header">
+                <i class="fas fa-user"></i>
+                <h2>User Information</h2>
+            </div>
+            <div id="userData" class="user-data-container">
+                <div class="placeholder-message">
+                    <i class="fas fa-user-slash"></i>
+                    <p>No user data available. Please scan an RFID card.</p>
+                </div>
+            </div>
+            <div class="progress-bar" id="saveProgress" style="display: none;"></div>
+        </div>
+
+        <div class="recent-scans">
+            <div class="section-header">
+                <i class="fas fa-history"></i>
+                <h2>Recent Scans</h2>
+            </div>
+            <div id="recentScans" class="recent-scans-container">
+                <!-- Recent scans will appear here dynamically -->
+                <p class="empty-scans-message">No recent scans</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <p>Made with <i class="fas fa-heart pulse"></i> by Team Four - Build Club</p>
+            <div class="footer-links">
+                <a href="#"><i class="fab fa-github"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fas fa-envelope"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBXCnzQdEipSGxOnyMVUbRpd5NdSV4o4kA",
+            authDomain: "mobile-mfrc522.firebaseapp.com",
+            databaseURL: "https://mobile-mfrc522-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "mobile-mfrc522",
+            storageBucket: "mobile-mfrc522.firebasestorage.app",
+            messagingSenderId: "552804570850",
+            appId: "1:552804570850:web:c808f2258888298c79f0bb",
+            measurementId: "G-NVWDS307VB"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        // Get the batch number from localStorage
+        const batchNumber = localStorage.getItem('batch');
+        if (batchNumber) {
+            console.log('Batch number:', batchNumber);
+            document.getElementById("batchDisplay").textContent = "Attendance for " + batchNumber.toUpperCase();
+        } else {
+            console.log("No batch in local storage");
+            document.getElementById("batchDisplay").textContent = "No batch selected";
+        }
+
+        // Function to refresh the page
+        function refreshPage() {
+            document.body.classList.add('fade-out');
+            setTimeout(() => {
+                location.reload();
+            }, 300);
+        }
+
+        // Check for authentication
+        auth.onAuthStateChanged(function(user) {
+            if (!user) {
+                // No user is signed in, redirect to login
+                console.log('No user is signed in');
+                document.body.classList.add('fade-out');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 500);
+            }
+        });
+
+        // Store recent scans
+        const recentScans = [];
+        const MAX_RECENT_SCANS = 5;
+
+        // Function to update the recent scans UI
+        function updateRecentScans(uid, name, roll) {
+            // Add the new scan to the beginning of the array
+            recentScans.unshift({ uid, name, roll, time: new Date() });
+            
+            // Keep only the most recent scans
+            if (recentScans.length > MAX_RECENT_SCANS) {
+                recentScans.pop();
+            }
+            
+            // Update the UI
+            const recentScansContainer = document.getElementById('recentScans');
+            recentScansContainer.innerHTML = '';
+            
+            if (recentScans.length > 0) {
+                recentScans.forEach((scan, index) => {
+                    const scanItem = document.createElement('div');
+                    scanItem.className = 'scan-item';
+                    scanItem.style.animationDelay = `${index * 0.1}s`;
+                    
+                    const time = scan.time.toLocaleTimeString();
+                    scanItem.innerHTML = `
+                        <div class="scan-uid">${scan.uid}</div>
+                        <div class="scan-details">
+                            <div class="scan-name">${scan.name}</div>
+                            <div class="scan-roll">${scan.roll}</div>
+                        </div>
+                        <div class="scan-time">${time}</div>
+                    `;
+                    recentScansContainer.appendChild(scanItem);
+                });
+            } else {
+                recentScansContainer.innerHTML = '<p class="empty-scans-message">No recent scans</p>';
+            }
+        }
+    </script>
+    <script src="app.js"></script>
+
+    <!-- Additional JS to enhance the UI interaction with app.js -->
+    <script>
+        // Enhanced UI interactions for BLE connection
+        let originalConnectButton;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            originalConnectButton = document.querySelector('.btn-connect').innerHTML;
+        });
+
+        // Override or extend the connectBLE function from app.js
+        const originalConnectBLE = window.connectBLE;
+        window.connectBLE = async function() {
+            const connectButton = document.querySelector('.btn-connect');
+            connectButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+            connectButton.disabled = true;
+            // Remove any existing classes that might affect the button's appearance
+            connectButton.classList.remove('connected', 'failed');
+            
+            try {
+                await originalConnectBLE();
+                
+                // Update UI elements
+                document.getElementById('connection-indicator').className = 'status-indicator connected';
+                connectButton.innerHTML = '<i class="fas fa-check-circle"></i> Connected';
+                connectButton.classList.add('connected');
+                document.getElementById("connection-status").innerText = "Connected";
+            } catch (error) {
+                console.error("Connection failed:", error);
+                document.getElementById('connection-indicator').className = 'status-indicator failed';
+                document.getElementById("connection-status").innerText = "Connection Failed";
+                connectButton.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to Connect';
+                connectButton.classList.remove('connected'); // Ensure 'connected' class is removed
+                connectButton.classList.add('failed');       // Add 'failed' class for red styling
+                
+                setTimeout(() => {
+                    connectButton.innerHTML = originalConnectButton;
+                    connectButton.disabled = false;
+                    connectButton.classList.remove('failed');
+                }, 3000);
+            }
+        };
+
+        // Override or extend the handleNotifications function
+        const originalHandleNotifications = window.handleNotifications;
+        window.handleNotifications = function(event) {
+            // Call the original function
+            originalHandleNotifications(event);
+            
+            // Add visual feedback for a new scan
+            document.getElementById('uid').classList.add('pulse');
+            setTimeout(() => {
+                document.getElementById('uid').classList.remove('pulse');
+            }, 1000);
+        };
+
+        // Override or extend the fetchUserData function
+        const originalFetchUserData = window.fetchUserData;
+        window.fetchUserData = function(uid) {
+            // Show loading state
+            document.getElementById('userData').innerHTML = `
+                <div class="loading-container">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <p>Loading user data...</p>
+                </div>
+            `;
+            document.getElementById('saveProgress').style.display = 'block';
+            
+            const batch = localStorage.getItem("batch");
+            const userRef = database.ref(`data/${batch}/${uid}`);
+            
+            userRef.on("value", (snapshot) => {
+                const userData = snapshot.val();
+                
+                if (userData) {
+                    const name = userData.name;
+                    const roll = userData.roll;
+                    
+                    // Update the UI with user data
+                    document.getElementById('userData').innerHTML = `
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fas fa-user-graduate"></i>
+                            </div>
+                            <div class="user-details">
+                                <h3>${name}</h3>
+                                <p>${roll}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Record attendance
+                    const now = new Date();
+                    const hh = String(now.getHours()).padStart(2, '0');
+                    const mm = String(now.getMinutes()).padStart(2, '0');
+                    const dd = String(now.getDate()).padStart(2, '0');
+                    const MM = String(now.getMonth() + 1).padStart(2, '0');
+                    const yy = String(now.getFullYear()).slice(2);
+                    const attendanceKey = `${hh}${mm}${dd}${MM}${yy}`;
+
+                    // Create a reference to the attendance data
+                    const attendanceRef = database.ref(`attendance/${batch}/${uid}/${attendanceKey}`);
+
+                    // Add save animation
+                    document.getElementById('saveProgress').classList.add('active');
+
+                    // Set the attendance data
+                    attendanceRef.set({
+                        name: name,
+                        roll: roll
+                    })
+                    .then(() => {
+                        console.log("Attendance data saved successfully!");
+                        // Show success message
+                        const successMessage = document.createElement('div');
+                        successMessage.className = 'success-message';
+                        successMessage.innerHTML = `
+                            <i class="fas fa-check-circle"></i>
+                            <span>Attendance recorded!</span>
+                        `;
+                        document.getElementById('userDataCard').appendChild(successMessage);
+                        
+                        setTimeout(() => {
+                            successMessage.classList.add('fade-out');
+                            setTimeout(() => {
+                                successMessage.remove();
+                            }, 500);
+                        }, 3000);
+                        
+                        // Update the recent scans list
+                        updateRecentScans(uid, name, roll);
+                    })
+                    .catch((error) => {
+                        console.error("Error saving attendance data:", error);
+                        // Show error message
+                        const errorMessage = document.createElement('div');
+                        errorMessage.className = 'error-message';
+                        errorMessage.innerHTML = `
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Failed to record attendance: ${error.message}</span>
+                        `;
+                        document.getElementById('userDataCard').appendChild(errorMessage);
+                        
+                        setTimeout(() => {
+                            errorMessage.classList.add('fade-out');
+                            setTimeout(() => {
+                                errorMessage.remove();
+                            }, 500);
+                        }, 3000);
+                    })
+                    .finally(() => {
+                        // Hide the progress bar
+                        setTimeout(() => {
+                            document.getElementById('saveProgress').classList.remove('active');
+                            document.getElementById('saveProgress').style.display = 'none';
+                        }, 1000);
+                    });
+                } else {
+                    // No user data found
+                    document.getElementById('userData').innerHTML = `
+                        <div class="not-found-message">
+                            <i class="fas fa-user-slash"></i>
+                            <p>No user data found for UID: ${uid}</p>
+                        </div>
+                    `;
+                    document.getElementById('saveProgress').style.display = 'none';
+                }
+            });
+        };
+
+        // Set the onDisconnected function
+        window.onDisconnected = function() {
+            document.getElementById("connection-status").innerText = "Disconnected";
+            document.getElementById('connection-indicator').className = 'status-indicator disconnected';
+            
+            const connectButton = document.querySelector('.btn-connect');
+            connectButton.innerHTML = originalConnectButton;
+            connectButton.disabled = false;
+            connectButton.classList.remove('connected');
+            
+            // Show disconnected notification
+            const notification = document.createElement('div');
+            notification.className = 'notification error';
+            notification.innerHTML = `
+                <i class="fas fa-unlink"></i>
+                <span>Device disconnected</span>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
+            }, 3000);
+        };
+
+        // Ensure connection status is reset when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Reset all connection-related UI elements
+            document.getElementById('connection-indicator').className = 'status-indicator disconnected';
+            document.getElementById('connection-status').textContent = "Not Connected";
+            
+            const connectButton = document.querySelector('.btn-connect');
+            connectButton.classList.remove('connected', 'failed');
+            connectButton.disabled = false;
+            // Fix icon rendering by using proper HTML with space between icon and text
+            connectButton.innerHTML = '<i class="fas fa-bluetooth"></i> <span>Connect Scanner</span>';
+            originalConnectButton = connectButton.innerHTML; // Store the fixed button HTML
+        });
+    </script>
+
+    <style>
+        /* Additional styling specific to attendance page */
+        .connection-status-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        
+        .status-indicator {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .disconnected {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ff9800;
+        }
+        
+        .connected {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        .failed {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
+        
+        .scan-info {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .info-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        .info-value {
+            font-family: monospace;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+        
+        .highlight {
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+        
+        .user-data-container {
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .placeholder-message, .not-found-message, .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .placeholder-message i, .not-found-message i, .loading-container i {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+        
+        .not-found-message i {
+            color: var(--warning-color);
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1.5rem;
+            font-size: 1.8rem;
+        }
+        
+        .user-details h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.4rem;
+        }
+        
+        .user-details p {
+            margin: 0;
+            color: var(--text-secondary);
+        }
+        
+        .success-message, .error-message {
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            animation: slideUp 0.3s forwards;
+            z-index: 100;
+        }
+        
+        .error-message {
+            background: rgba(244, 67, 54, 0.9);
+        }
+        
+        .success-message i, .error-message i {
+            margin-right: 0.5rem;
+        }
+        
+        @keyframes slideUp {
+            to {
+                bottom: -20px;
+            }
+        }
+        
+        .recent-scans {
+            width: 100%;
+            max-width: 800px;
+        }
+        
+        .recent-scans-container {
+            margin-top: 1rem;
+        }
+        
+        .scan-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--background-light);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .scan-uid {
+            font-family: monospace;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .scan-details {
+            flex-grow: 1;
+            padding: 0 1rem;
+        }
+        
+        .scan-name {
+            font-weight: 500;
+        }
+        
+        .scan-roll {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        
+        .scan-time {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .empty-scans-message {
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 1rem;
+        }
+        
+        .pulse {
+            animation: textPulse 1s;
+        }
+        
+        @keyframes textPulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+                color: var(--primary-color);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        .back-button {
+            display: flex;
+            align-items: center;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .back-button:hover {
+            color: var(--text-primary);
+        }
+        
+        .back-button i {
+            margin-right: 0.5rem;
+        }
+        
+        .btn-connect.connected {
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+        }
+        
+        .btn-connect.failed {
+            background: linear-gradient(45deg, #f44336, #ff5722);
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification i {
+            margin-right: 0.5rem;
+        }
+        
+        .notification.error {
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        .notification.success {
+            border-left: 4px solid var(--success-color);
+        }
+        
+        #saveProgress.active {
+            display: block;
+        }
+
+        /* Reset and redefine button styles to ensure they work correctly */
+        .btn-connect {
+            background: linear-gradient(45deg, var(--primary-color), var(--accent-color)) !important;
+            transition: background 0.3s ease, transform var(--transition-speed), box-shadow var(--transition-speed);
+        }
+        
+        .btn-connect.connected {
+            background: linear-gradient(45deg, #4CAF50, #8BC34A) !important;
+        }
+        
+        .btn-connect.failed {
+            background: linear-gradient(45deg, #f44336, #ff5722) !important;
+        }
+        
+        /* Ensure button styles precedence with higher specificity */
+        .action-buttons .btn-connect {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        /* Improve icon and text alignment in buttons */
+        .btn-connect {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            background: linear-gradient(45deg, var(--primary-color), var(--accent-color)) !important;
+        }
+        
+        .btn-connect i {
+            font-size: 1.1em;
+            display: inline-block;
+        }
+    </style>
+</body>
+</html>
