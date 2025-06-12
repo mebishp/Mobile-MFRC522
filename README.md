@@ -131,19 +131,7 @@ The system consists of three main components:
         *   `index.html`
         *   `login.html`
     *   In each file, find the `firebaseConfig` JavaScript object:
-        ```javascript
-        const firebaseConfig = {
-            apiKey: "AIzaSyBXCnzQdEipSGxOnyMVUbRpd5NdSV4o4kA", // EXAMPLE
-            authDomain: "mobile-mfrc522.firebaseapp.com",    // EXAMPLE
-            databaseURL: "https://mobile-mfrc522-default-rtdb.asia-southeast1.firebasedatabase.app", // EXAMPLE
-            projectId: "mobile-mfrc522",                     // EXAMPLE
-            storageBucket: "mobile-mfrc522.firebasestorage.app",// EXAMPLE
-            messagingSenderId: "552804570850",               // EXAMPLE
-            appId: "1:552804570850:web:c808f2258888298c79f0bb",// EXAMPLE
-            measurementId: "G-NVWDS307VB"                    // EXAMPLE
-        };
-        ```
-    *   Replace the placeholder values with the actual `firebaseConfig` values you copied from your Firebase project.
+    *   Put the firebaseConfig values from the Firebase Project.
 
 ### 3. Web Application Setup
 
@@ -199,15 +187,6 @@ The system consists of three main components:
 
 Contributions are welcome! If you have suggestions or improvements, please feel free to fork the repository, make your changes, and submit a pull request.
 
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
-
-## License
-
-This project is open-source. You can specify a license here if you choose one (e.g., MIT License). If no license is specified, standard copyright laws apply.
 
 ---
 
